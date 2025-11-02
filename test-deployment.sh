@@ -82,19 +82,6 @@ check_prerequisites() {
     echo -e "\n${GREEN}All prerequisites met${NC}"
 }
 
-# Function to get AWS region from config
-get_aws_region() {
-    python3 << 'EOF'
-import json
-import base64
-config_file = "$HOME/.ll-win-client/config.json".replace("$HOME", "$HOME")
-with open(config_file.replace("$HOME", "/Users/$USER")) as f:
-    config = json.load(f)
-    region = base64.b64decode(config['aws_region']).decode()
-    print(region)
-EOF
-}
-
 # Function to wait for instance to be running
 wait_for_instance() {
     local instance_id=$1
@@ -250,12 +237,11 @@ check_prerequisites
 # Get AWS region
 REGION=$(python3 << 'EOF'
 import json
-import base64
 import os
 config_file = os.path.expanduser("~/.ll-win-client/config.json")
 with open(config_file) as f:
     config = json.load(f)
-    region = base64.b64decode(config['aws_region']).decode()
+    region = config['region']
     print(region)
 EOF
 )
