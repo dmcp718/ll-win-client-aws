@@ -1726,6 +1726,168 @@ preferred-video-codec=h264
         console.print()
         Prompt.ask("Press Enter to continue")
 
+    def stop_all_instances(self):
+        """Stop all running instances to save money"""
+        console.clear()
+        self.show_banner()
+
+        console.print(Panel.fit(
+            "[bold]Stop All Instances[/bold]\n"
+            "This will stop all running instances to save compute costs.\n"
+            "Storage costs will still apply. You can start them again later.",
+            border_style="yellow"
+        ))
+        console.print()
+
+        # Get terraform outputs
+        outputs = self.get_terraform_outputs()
+        if not outputs:
+            console.print(f"[{self.colors['error']}]No deployment found. Please deploy instances first.[/]")
+            console.print()
+            Prompt.ask("Press Enter to continue")
+            return
+
+        instance_ids = outputs.get('instance_ids', [])
+        if not instance_ids:
+            console.print(f"[{self.colors['warning']}]No instances found in deployment.[/]")
+            console.print()
+            Prompt.ask("Press Enter to continue")
+            return
+
+        console.print(f"Found {len(instance_ids)} instance(s):")
+        for idx, instance_id in enumerate(instance_ids):
+            console.print(f"  {idx + 1}. {instance_id}")
+        console.print()
+
+        # Check current status
+        region = self.config.get('region', 'us-east-1')
+        ec2 = boto3.client('ec2', region_name=region)
+
+        try:
+            response = ec2.describe_instances(InstanceIds=instance_ids)
+            running_instances = []
+            for reservation in response['Reservations']:
+                for instance in reservation['Instances']:
+                    state = instance['State']['Name']
+                    console.print(f"  {instance['InstanceId']}: [{self.colors['info']}]{state}[/]")
+                    if state == 'running':
+                        running_instances.append(instance['InstanceId'])
+
+            if not running_instances:
+                console.print(f"\n[{self.colors['warning']}]No running instances to stop.[/]")
+                console.print()
+                Prompt.ask("Press Enter to continue")
+                return
+
+            console.print(f"\n[{self.colors['warning']}]This will stop {len(running_instances)} running instance(s).[/]")
+            console.print(f"[{self.colors['info']}]Stopped instances still incur storage charges but not compute charges.[/]")
+
+            if not Confirm.ask("\nProceed with stopping instances?", default=False):
+                console.print(f"[{self.colors['info']}]Operation cancelled.[/]")
+                console.print()
+                Prompt.ask("Press Enter to continue")
+                return
+
+            # Stop instances
+            console.print(f"\n[bold yellow]Stopping instances...[/bold yellow]")
+            ec2.stop_instances(InstanceIds=running_instances)
+
+            # Wait for stopped state
+            with console.status("[bold yellow]Waiting for instances to stop...[/bold yellow]"):
+                waiter = ec2.get_waiter('instance_stopped')
+                waiter.wait(InstanceIds=running_instances)
+
+            console.print(f"\n[{self.colors['success']}]✓ Successfully stopped {len(running_instances)} instance(s)[/]")
+            console.print(f"\n[{self.colors['info']}]To resume work, use 'Start All Instances' from the main menu.[/]")
+
+        except Exception as e:
+            console.print(f"\n[{self.colors['error']}]Error stopping instances: {e}[/]")
+            logger.error(f"Error stopping instances: {e}", exc_info=True)
+
+        console.print()
+        Prompt.ask("Press Enter to continue")
+
+    def start_all_instances(self):
+        """Start all stopped instances"""
+        console.clear()
+        self.show_banner()
+
+        console.print(Panel.fit(
+            "[bold]Start All Instances[/bold]\n"
+            "This will start all stopped instances so you can resume work.",
+            border_style="green"
+        ))
+        console.print()
+
+        # Get terraform outputs
+        outputs = self.get_terraform_outputs()
+        if not outputs:
+            console.print(f"[{self.colors['error']}]No deployment found. Please deploy instances first.[/]")
+            console.print()
+            Prompt.ask("Press Enter to continue")
+            return
+
+        instance_ids = outputs.get('instance_ids', [])
+        if not instance_ids:
+            console.print(f"[{self.colors['warning']}]No instances found in deployment.[/]")
+            console.print()
+            Prompt.ask("Press Enter to continue")
+            return
+
+        console.print(f"Found {len(instance_ids)} instance(s):")
+        for idx, instance_id in enumerate(instance_ids):
+            console.print(f"  {idx + 1}. {instance_id}")
+        console.print()
+
+        # Check current status
+        region = self.config.get('region', 'us-east-1')
+        ec2 = boto3.client('ec2', region_name=region)
+
+        try:
+            response = ec2.describe_instances(InstanceIds=instance_ids)
+            stopped_instances = []
+            for reservation in response['Reservations']:
+                for instance in reservation['Instances']:
+                    state = instance['State']['Name']
+                    console.print(f"  {instance['InstanceId']}: [{self.colors['info']}]{state}[/]")
+                    if state == 'stopped':
+                        stopped_instances.append(instance['InstanceId'])
+
+            if not stopped_instances:
+                console.print(f"\n[{self.colors['warning']}]No stopped instances to start.[/]")
+                console.print()
+                Prompt.ask("Press Enter to continue")
+                return
+
+            console.print(f"\n[{self.colors['info']}]This will start {len(stopped_instances)} stopped instance(s).[/]")
+            console.print(f"[{self.colors['warning']}]Compute charges will resume once instances are running.[/]")
+
+            if not Confirm.ask("\nProceed with starting instances?", default=True):
+                console.print(f"[{self.colors['info']}]Operation cancelled.[/]")
+                console.print()
+                Prompt.ask("Press Enter to continue")
+                return
+
+            # Start instances
+            console.print(f"\n[bold green]Starting instances...[/bold green]")
+            ec2.start_instances(InstanceIds=stopped_instances)
+
+            # Wait for running state
+            with console.status("[bold green]Waiting for instances to start...[/bold green]"):
+                waiter = ec2.get_waiter('instance_running')
+                waiter.wait(InstanceIds=stopped_instances)
+
+            console.print(f"\n[{self.colors['success']}]✓ Successfully started {len(stopped_instances)} instance(s)[/]")
+            console.print(f"\n[{self.colors['info']}]Instances are now running. You can connect via DCV.[/]")
+            console.print(f"[{self.colors['info']}]Connection files: ~/Desktop/LucidLink-DCV/[/]")
+
+        except Exception as e:
+            console.print(f"\n[{self.colors['error']}]Error starting instances: {e}[/]")
+            logger.error(f"Error starting instances: {e}", exc_info=True)
+
+        console.print()
+        Prompt.ask("Press Enter to continue")
+
     def show_main_menu(self):
         """Display main menu"""
         while True:
@@ -1755,13 +1917,15 @@ preferred-video-codec=h264
             console.print("3. Deploy Client Instances")
             console.print("4. View Deployment Status")
             console.print("5. Regenerate Connection Files (DCV)")
-            console.print("6. Destroy Client Instances")
-            console.print("7. Exit")
+            console.print("6. Stop All Instances (Save Money)")
+            console.print("7. Start All Instances")
+            console.print("8. Destroy Client Instances")
+            console.print("9. Exit")
             console.print()
 
             choice = Prompt.ask(
                 "Select an option",
-                choices=['1', '2', '3', '4', '5', '6', '7'],
+                choices=['1', '2', '3', '4', '5', '6', '7', '8', '9'],
                 default='1'
             )
 
@@ -1776,8 +1940,12 @@ preferred-video-codec=h264
             elif choice == '5':
                 self.regenerate_connection_files()
             elif choice == '6':
-                self.destroy_infrastructure()
+                self.stop_all_instances()
             elif choice == '7':
+                self.start_all_instances()
+            elif choice == '8':
+                self.destroy_infrastructure()
+            elif choice == '9':
                 console.print("\n[bold cyan]Goodbye![/bold cyan]")
                 sys.exit(0)
 

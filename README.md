@@ -159,6 +159,11 @@ uv run ll-win-client-aws.py --help
 - **SSH Key method** (optional) - Traditional password decryption
 - **One password for all instances** - Easy for demonstrations
 
+### Cost Management
+- **Stop/Start instances** - Save ~95% of costs when not in use
+- **Complete destroy** - Remove everything when done permanently
+- **No running charges when stopped** - Only pay for storage (~$0.01/hour)
+
 ---
 
 ## What Gets Deployed
@@ -180,7 +185,7 @@ uv run ll-win-client-aws.py --help
 - g4dn.xlarge: ~$0.50/hour per instance
 - g4dn.2xlarge: ~$0.75/hour per instance
 - Storage (100GB): ~$0.01/hour
-- **Always destroy when not in use!**
+- **Stop instances when not in use to save money!**
 
 ---
 
@@ -221,15 +226,19 @@ Generated at: `~/Desktop/LucidLink-DCV/`
 3. Deploy Client Instances
 4. View Deployment Status
 5. Regenerate Connection Files (DCV)
-6. Destroy Client Instances
-7. Exit
+6. Stop All Instances (Save Money)
+7. Start All Instances
+8. Destroy Client Instances
+9. Exit
 ```
 
 **Typical workflow:**
 1. Configure (Option 1) - Set up AWS, LucidLink, instance settings
 2. Deploy (Option 3) - Launch infrastructure (~10-15 minutes)
 3. Connect - Use DCV files from Desktop
-4. Destroy (Option 6) - Remove all resources when done
+4. Stop (Option 6) - Pause instances when not in use to save money
+5. Start (Option 7) - Resume instances to continue work
+6. Destroy (Option 8) - Remove all resources when done permanently
 
 ---
 
@@ -321,10 +330,24 @@ uv run ll-win-client-aws.py
 # Choose Option 4: View Deployment Status
 ```
 
+### Stop Instances (Save Money)
+```bash
+uv run ll-win-client-aws.py
+# Choose Option 6: Stop All Instances
+# Stops compute, keeps storage - saves ~95% of costs
+```
+
+### Start Instances (Resume Work)
+```bash
+uv run ll-win-client-aws.py
+# Choose Option 7: Start All Instances
+# Resumes stopped instances
+```
+
 ### Destroy Everything
 ```bash
 uv run ll-win-client-aws.py
-# Choose Option 6: Destroy Client Instances
+# Choose Option 8: Destroy Client Instances
 ```
 
 ### Manual Terraform Commands
@@ -344,7 +367,7 @@ terraform destroy # Remove all resources
 - ✅ Rotate AWS access keys every 90 days
 - ✅ Delete `~/Desktop/LucidLink-DCV/PASSWORDS.txt` after saving elsewhere
 - ✅ Keep `~/.ll-win-client/config.json` secure (contains credentials)
-- ✅ Always destroy instances when not in use
+- ✅ Stop instances when not in use (Option 6), or destroy when done permanently (Option 8)
 - ✅ Enable MFA on AWS root account
 
 ### What's Encrypted
@@ -374,10 +397,15 @@ terraform destroy # Remove all resources
 **Example**: 2× g4dn.xlarge for 8 hours = ~$8-10
 
 ### Save Money
-- ✅ **Always destroy when done** - Don't leave running overnight
+- ✅ **Stop instances when not in use** (Option 6) - Saves ~95% of costs, keeps your data
+- ✅ **Destroy when done permanently** (Option 8) - Removes everything
 - ✅ Use smaller instances for testing
 - ✅ Monitor costs in AWS Cost Explorer
 - ✅ Set up billing alerts in AWS
+
+**Stop vs Destroy:**
+- **Stop**: Saves compute costs (~$0.50-1.20/hour), keeps storage (~$0.01/hour), can resume work
+- **Destroy**: Removes everything, no costs, cannot resume (must redeploy)
 
 ---
 
