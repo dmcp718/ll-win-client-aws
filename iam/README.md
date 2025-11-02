@@ -295,7 +295,7 @@ This IAM user has read-only access to Cost Explorer:
 ```bash
 # View current month costs
 aws ce get-cost-and-usage \
-  --time-period Start=2025-01-01,End=2025-02-01 \
+  --time-period Start=2025-01-01,End=2025-11-02 \
   --granularity MONTHLY \
   --metrics BlendedCost \
   --profile ll-win-client
@@ -312,5 +312,5 @@ For issues or questions:
 
 ---
 
-**Last Updated:** 2025-02-01
+**Last Updated:** 2025-11-02
 **Policy Version:** 1.0
