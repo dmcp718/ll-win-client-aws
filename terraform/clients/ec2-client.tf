@@ -333,6 +333,9 @@ resource "aws_instance" "windows_client" {
 
   lifecycle {
     create_before_destroy = true
+    replace_triggered_by = [
+      aws_launch_template.windows_client.latest_version
+    ]
   }
 }
 
