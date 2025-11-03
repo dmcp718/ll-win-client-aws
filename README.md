@@ -158,6 +158,10 @@ uv run ll-win-client-aws.py --help
 ### Automation
 - **Interactive TUI** for configuration with Rich library
 - **Terraform** for Infrastructure as Code
+- **S3-Based Userdata Architecture** - Bypasses AWS 16KB userdata limit
+  - Minimal bootstrap script (~1.5KB) downloads full setup from S3
+  - No size restrictions on initialization scripts
+  - Maintains all documentation and comments
 - **Automated LucidLink installation** via PowerShell userdata
 - **AWS Secrets Manager** for credential storage
 - **CloudWatch Logs** for instance monitoring
@@ -196,8 +200,9 @@ uv run ll-win-client-aws.py --help
 | Subnet | 1 | Public subnet with auto-assign IP |
 | Internet Gateway | 1 | Internet access |
 | Security Group | 1 | DCV + SSM access |
+| S3 Bucket | 1 | Userdata scripts storage (bypasses 16KB limit) |
 | Windows Instances | 1-10 | Your workstations |
-| IAM Role | 1 | Instance permissions |
+| IAM Role | 1 | Instance permissions (Secrets Manager, CloudWatch, S3) |
 | Secrets Manager Secret | 1 | LucidLink credentials |
 | CloudWatch Log Group | 1 | Instance logs |
 
@@ -309,9 +314,11 @@ ll-win-client-aws/
     ├── main.tf                    # VPC and networking
     ├── variables.tf               # Input variables
     ├── ec2-client.tf              # Windows instances and IAM
+    ├── s3-userdata.tf             # S3 bucket for userdata scripts
     ├── outputs.tf                 # Output values
     └── templates/
-        └── windows-userdata.ps1   # Instance initialization
+        ├── windows-userdata.ps1   # Full setup script (uploaded to S3)
+        └── minimal-userdata.ps1   # Bootstrap script (in EC2 userdata)
 ```
 
 ---
