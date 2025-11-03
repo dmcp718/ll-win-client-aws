@@ -100,9 +100,15 @@ uv run ll-win-client-aws.py
 ### Local Tools (Must Be Installed)
 
 - ✅ **Python 3.8+** - Check: `python3 --version`
-- ✅ **uv** - Install: `curl -LsSf https://astral.sh/uv/install.sh | sh`
-- ✅ **Terraform 1.2+** - Install: https://www.terraform.io/downloads
-- ✅ **AWS CLI v2** - Install: https://aws.amazon.com/cli/
+- ✅ **uv** - Python package manager
+  - macOS/Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+  - Homebrew: `brew install uv`
+- ✅ **Terraform 1.2+** - Infrastructure as Code tool
+  - Download: https://www.terraform.io/downloads
+  - Homebrew: `brew install terraform`
+- ✅ **AWS CLI v2** - AWS command-line interface
+  - Download: https://aws.amazon.com/cli/
+  - Homebrew: `brew install awscli`
 
 **Verify prerequisites:**
 ```bash
@@ -110,6 +116,11 @@ python3 --version  # Should show 3.8+
 uv --version       # Should show uv installed
 terraform -version # Should show 1.2+
 aws --version      # Should show aws-cli/2.x
+```
+
+**Quick install with Homebrew (macOS):**
+```bash
+brew install uv terraform awscli
 ```
 
 ---
