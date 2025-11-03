@@ -145,7 +145,12 @@ uv run ll-win-client-aws.py --help
 
 ### Infrastructure
 - **Windows Server 2022** with NVIDIA RTX drivers pre-installed
-- **G4dn Instance Types** with NVIDIA T4 GPUs (g4dn.xlarge, 2xlarge, 4xlarge)
+- **All GPU Instance Types** - Dynamically fetched from AWS API based on your region
+  - g4dn series (NVIDIA T4 GPUs)
+  - g5 series (NVIDIA A10G GPUs)
+  - g6 series (NVIDIA L4 GPUs)
+  - g4ad series (AMD Radeon Pro V520 GPUs)
+  - And more as AWS releases new GPU instances
 - **VPC with Internet Gateway** for isolated networking
 - **Security Groups** with DCV (8443) and SSM access
 - **Encrypted EBS Volumes** at rest
@@ -192,11 +197,13 @@ uv run ll-win-client-aws.py --help
 | Secrets Manager Secret | 1 | LucidLink credentials |
 | CloudWatch Log Group | 1 | Instance logs |
 
-**Estimated costs** (us-east-1):
-- g4dn.xlarge: ~$0.50/hour per instance
-- g4dn.2xlarge: ~$0.75/hour per instance
+**Estimated costs** (us-east-1, examples):
+- g4dn.xlarge (NVIDIA T4): ~$0.50/hour per instance
+- g5.xlarge (NVIDIA A10G): ~$1.00/hour per instance
+- g6.xlarge (NVIDIA L4): ~$0.84/hour per instance
 - Storage (100GB): ~$0.01/hour
 - **Stop instances when not in use to save money!**
+- Pricing varies by region and instance type - check AWS pricing for your selected GPU instance
 
 ---
 
@@ -401,16 +408,20 @@ terraform destroy # Remove all resources
 
 ### Estimated Costs (us-east-1)
 
-**Per Instance:**
-| Component | Cost |
-|-----------|------|
-| g4dn.xlarge (4 vCPU, 16GB, 1 GPU) | ~$0.50/hour |
-| g4dn.2xlarge (8 vCPU, 32GB, 1 GPU) | ~$0.75/hour |
-| g4dn.4xlarge (16 vCPU, 64GB, 1 GPU) | ~$1.20/hour |
-| EBS Storage (100GB) | ~$0.01/hour |
-| Data Transfer Out | Varies |
+**Per Instance (examples):**
+| Component | GPU | Cost |
+|-----------|-----|------|
+| g4dn.xlarge (4 vCPU, 16GB) | NVIDIA T4 | ~$0.50/hour |
+| g4dn.2xlarge (8 vCPU, 32GB) | NVIDIA T4 | ~$0.75/hour |
+| g4dn.4xlarge (16 vCPU, 64GB) | NVIDIA T4 | ~$1.20/hour |
+| g5.xlarge (4 vCPU, 16GB) | NVIDIA A10G | ~$1.00/hour |
+| g5.2xlarge (8 vCPU, 32GB) | NVIDIA A10G | ~$1.50/hour |
+| g6.xlarge (4 vCPU, 16GB) | NVIDIA L4 | ~$0.84/hour |
+| EBS Storage (100GB) | - | ~$0.01/hour |
+| Data Transfer Out | - | Varies |
 
 **Example**: 2× g4dn.xlarge for 8 hours = ~$8-10
+**Note**: Prices vary by region and instance type. Check AWS pricing page for your selected region and GPU instance.
 
 ### Save Money
 - ✅ **Stop instances when not in use** (Option 6) - Saves ~95% of costs, keeps your data
