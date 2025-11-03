@@ -129,8 +129,8 @@ $installerUrl = "${installer_url}"
 try {
     Write-Log "Installer URL: $installerUrl"
 
-    # Use BITS transfer which handles redirects reliably
-    Start-BitsTransfer -Source $installerUrl -Destination $lucidlinkInstaller
+    # Use Invoke-WebRequest (same as AWS CLI and DCV downloads)
+    Invoke-WebRequest -Uri $installerUrl -OutFile $lucidlinkInstaller -UseBasicParsing
 
     $fileSize = (Get-Item $lucidlinkInstaller).Length
     Write-Log "Downloaded: $([math]::Round($fileSize/1MB, 2)) MB"
