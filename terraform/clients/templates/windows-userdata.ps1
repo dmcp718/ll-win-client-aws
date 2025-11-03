@@ -162,6 +162,198 @@ try {
 }
 
 # ==============================================================================
+# Optional Application Installation Framework
+# ==============================================================================
+# This framework provides a flexible way to install additional applications
+# using a 3-tier approach: Winget (native) → Chocolatey → Direct Download
+#
+# TO ENABLE AN APPLICATION: Uncomment the Install-Application line
+# TO ADD YOUR OWN: Copy the pattern and add your application details
+# ==============================================================================
+
+function Install-Application {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Name,
+
+        [Parameter(Mandatory=$false)]
+        [string]$WingetId = "",
+
+        [Parameter(Mandatory=$false)]
+        [string]$ChocoPackage = "",
+
+        [Parameter(Mandatory=$false)]
+        [string]$DirectUrl = "",
+
+        [Parameter(Mandatory=$false)]
+        [string]$DirectArgs = ""
+    )
+
+    Write-Log "==================================================================="
+    Write-Log "Installing: $Name"
+    Write-Log "==================================================================="
+
+    $installed = $false
+
+    # Tier 1: Try Winget (built into Windows Server 2022)
+    if ($WingetId -and !$installed) {
+        try {
+            Write-Log "Attempting installation via Winget..."
+            $wingetPath = "C:\Program Files\WindowsApps\Microsoft.DesktopAppInstaller_*_x64__8wekyb3d8bbwe\winget.exe"
+            $wingetExe = Get-Item $wingetPath -ErrorAction SilentlyContinue | Select-Object -First 1
+
+            if ($wingetExe) {
+                Write-Log "Winget found at: $($wingetExe.FullName)"
+                & $wingetExe.FullName install --id $WingetId --silent --accept-package-agreements --accept-source-agreements
+
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Log "SUCCESS: $Name installed via Winget"
+                    $installed = $true
+                } else {
+                    Write-Log "Winget install failed with exit code: $LASTEXITCODE"
+                }
+            } else {
+                Write-Log "Winget not found, trying next method..."
+            }
+        } catch {
+            Write-Log "Winget installation failed: $_"
+        }
+    }
+
+    # Tier 2: Try Chocolatey (requires installation first)
+    if ($ChocoPackage -and !$installed) {
+        try {
+            Write-Log "Attempting installation via Chocolatey..."
+
+            # Check if Chocolatey is installed
+            $chocoCmd = Get-Command choco -ErrorAction SilentlyContinue
+
+            if (!$chocoCmd) {
+                Write-Log "Installing Chocolatey package manager..."
+                Set-ExecutionPolicy Bypass -Scope Process -Force
+                [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+                iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+
+                # Refresh environment
+                $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+                $chocoCmd = Get-Command choco -ErrorAction SilentlyContinue
+            }
+
+            if ($chocoCmd) {
+                Write-Log "Chocolatey found, installing $Name..."
+                & choco install $ChocoPackage -y --no-progress
+
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Log "SUCCESS: $Name installed via Chocolatey"
+                    $installed = $true
+                } else {
+                    Write-Log "Chocolatey install failed with exit code: $LASTEXITCODE"
+                }
+            }
+        } catch {
+            Write-Log "Chocolatey installation failed: $_"
+        }
+    }
+
+    # Tier 3: Try Direct Download (least preferred, most fragile)
+    if ($DirectUrl -and !$installed) {
+        try {
+            Write-Log "Attempting direct download installation..."
+            $installerPath = "$env:TEMP\$($Name -replace ' ','')-installer.exe"
+
+            Write-Log "Downloading from: $DirectUrl"
+            Invoke-WebRequest -Uri $DirectUrl -OutFile $installerPath -UseBasicParsing
+
+            Write-Log "Running installer with args: $DirectArgs"
+            $process = Start-Process -FilePath $installerPath -ArgumentList $DirectArgs -Wait -PassThru -NoNewWindow
+
+            if ($process.ExitCode -eq 0) {
+                Write-Log "SUCCESS: $Name installed via direct download"
+                $installed = $true
+            } else {
+                Write-Log "Direct install failed with exit code: $($process.ExitCode)"
+            }
+
+            # Cleanup
+            Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+        } catch {
+            Write-Log "Direct download installation failed: $_"
+        }
+    }
+
+    # Final status
+    if ($installed) {
+        Write-Log "✓ $Name installation completed successfully"
+    } else {
+        Write-Log "✗ $Name installation failed (all methods exhausted)"
+    }
+
+    Write-Log "==================================================================="
+}
+
+# ==============================================================================
+# OPTIONAL APPLICATIONS - Uncomment to Enable
+# ==============================================================================
+# To install an application, remove the '#' comment from the start of each line
+
+# Adobe Creative Cloud (for graphics/video work)
+# Install-Application `
+#     -Name "Adobe Creative Cloud" `
+#     -WingetId "Adobe.CreativeCloud" `
+#     -ChocoPackage "adobe-creative-cloud"
+
+# 7-Zip (file compression/extraction)
+# Install-Application `
+#     -Name "7-Zip" `
+#     -WingetId "7zip.7zip" `
+#     -ChocoPackage "7zip"
+
+# VLC Media Player (video playback)
+# Install-Application `
+#     -Name "VLC Media Player" `
+#     -WingetId "VideoLAN.VLC" `
+#     -ChocoPackage "vlc"
+
+# Visual Studio Code (code editor)
+# Install-Application `
+#     -Name "Visual Studio Code" `
+#     -WingetId "Microsoft.VisualStudioCode" `
+#     -ChocoPackage "vscode"
+
+# Notepad++ (text editor)
+# Install-Application `
+#     -Name "Notepad++" `
+#     -WingetId "Notepad++.Notepad++" `
+#     -ChocoPackage "notepadplusplus"
+
+# Git for Windows (version control)
+# Install-Application `
+#     -Name "Git for Windows" `
+#     -WingetId "Git.Git" `
+#     -ChocoPackage "git"
+
+# Python 3 (programming language)
+# Install-Application `
+#     -Name "Python 3" `
+#     -WingetId "Python.Python.3.12" `
+#     -ChocoPackage "python"
+
+# ==============================================================================
+# ADD YOUR OWN APPLICATIONS HERE
+# ==============================================================================
+# Template:
+# Install-Application `
+#     -Name "Your Application Name" `
+#     -WingetId "Publisher.AppName" `
+#     -ChocoPackage "package-name" `
+#     -DirectUrl "https://example.com/installer.exe" `
+#     -DirectArgs "/S /SILENT"
+#
+# To find Winget IDs: winget search "app name"
+# To find Choco packages: https://community.chocolatey.org/packages
+# ==============================================================================
+
+# ==============================================================================
 # Download and Install LucidLink
 # ==============================================================================
 Write-Log "Downloading LucidLink installer..."

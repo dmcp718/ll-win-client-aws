@@ -161,6 +161,10 @@ uv run ll-win-client-aws.py --help
 - **Automated LucidLink installation** via PowerShell userdata
 - **AWS Secrets Manager** for credential storage
 - **CloudWatch Logs** for instance monitoring
+- **Optional Application Framework** - Install additional software automatically
+  - Adobe Creative Cloud
+  - 7-Zip, VLC, VS Code, Notepad++, Git, Python
+  - Easy to customize for your own applications
 
 ### Remote Access
 - **Amazon DCV** (primary) - GPU-accelerated remote desktop
@@ -380,6 +384,66 @@ terraform plan    # Preview changes
 terraform apply   # Apply changes
 terraform destroy # Remove all resources
 ```
+
+### Install Optional Applications
+The deployment includes a flexible framework for installing additional applications automatically during Windows initialization.
+
+**Available Applications** (all commented out by default):
+- Adobe Creative Cloud (for graphics/video work)
+- 7-Zip, VLC Media Player, Notepad++
+- Visual Studio Code, Git for Windows, Python 3
+
+**To Enable Applications:**
+
+1. Edit the userdata script:
+   ```bash
+   nano terraform/clients/templates/windows-userdata.ps1
+   ```
+
+2. Find the "OPTIONAL APPLICATIONS" section (around line 295)
+
+3. Uncomment the applications you want. For example, to install Adobe Creative Cloud:
+   ```powershell
+   # Change FROM:
+   # Install-Application `
+   #     -Name "Adobe Creative Cloud" `
+   #     -WingetId "Adobe.CreativeCloud" `
+   #     -ChocoPackage "adobe-creative-cloud"
+
+   # Change TO:
+   Install-Application `
+       -Name "Adobe Creative Cloud" `
+       -WingetId "Adobe.CreativeCloud" `
+       -ChocoPackage "adobe-creative-cloud"
+   ```
+
+4. Deploy new instances - applications install automatically during initialization
+
+**3-Tier Installation Method:**
+1. **Winget** (native to Windows Server 2022) - tried first
+2. **Chocolatey** - automatic fallback if Winget fails
+3. **Direct Download** - last resort (requires URL)
+
+**Add Your Own Applications:**
+
+Follow the template at the bottom of the optional applications section:
+
+```powershell
+Install-Application `
+    -Name "Your Application Name" `
+    -WingetId "Publisher.AppName" `
+    -ChocoPackage "package-name" `
+    -DirectUrl "https://example.com/installer.exe" `
+    -DirectArgs "/S /SILENT"
+```
+
+**Find Package IDs:**
+- **Winget**: Run `winget search "app name"` on a Windows machine
+- **Chocolatey**: Visit https://community.chocolatey.org/packages
+
+**Installation Logs:**
+- Check `C:\lucidlink-init.log` on the Windows instance for installation status
+- Each application logs its installation progress
 
 ---
 
