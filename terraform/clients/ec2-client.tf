@@ -240,7 +240,7 @@ resource "aws_secretsmanager_secret_version" "lucidlink_credentials" {
 
 resource "aws_launch_template" "windows_client" {
   name_prefix   = "ll-win-client-"
-  description   = "Launch template for Windows LucidLink client instances"
+  description   = "Launch template for Windows LucidLink client instances (v2 - fixed BITS)"
   image_id      = local.selected_ami_id
   instance_type = var.instance_type
   key_name      = var.ssh_key_name != "" ? var.ssh_key_name : null
