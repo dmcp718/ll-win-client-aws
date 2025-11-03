@@ -129,8 +129,8 @@ $installerUrl = "${installer_url}"
 try {
     Write-Log "Installer URL: $installerUrl"
 
-    # Use Invoke-WebRequest (same as AWS CLI and DCV downloads)
-    Invoke-WebRequest -Uri $installerUrl -OutFile $lucidlinkInstaller -UseBasicParsing
+    # Use curl.exe to handle HTTP 308 redirects properly
+    & curl.exe -L -o $lucidlinkInstaller $installerUrl
 
     $fileSize = (Get-Item $lucidlinkInstaller).Length
     Write-Log "Downloaded: $([math]::Round($fileSize/1MB, 2)) MB"
