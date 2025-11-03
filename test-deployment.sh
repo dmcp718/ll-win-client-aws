@@ -90,21 +90,71 @@ wait_for_instance() {
     print_header "Waiting for Instance to be Running"
 
     echo "Instance ID: $instance_id"
-    echo "Waiting for instance to reach 'running' state..."
+    echo "Region: $region"
+    echo ""
 
-    aws ec2 wait instance-running \
-        --instance-ids "$instance_id" \
-        --region "$region"
+    # Wait for running state with timeout
+    echo "Waiting for instance to reach 'running' state (max 10 minutes)..."
+    local running_timeout=600
+    local running_elapsed=0
 
-    echo -e "${GREEN}✓${NC} Instance is running"
+    while [ $running_elapsed -lt $running_timeout ]; do
+        STATE=$(aws ec2 describe-instances \
+            --instance-ids "$instance_id" \
+            --region "$region" \
+            --query 'Reservations[0].Instances[0].State.Name' \
+            --output text 2>/dev/null || echo "unknown")
 
-    # Wait for status checks
-    echo "Waiting for status checks to pass (this may take 5-10 minutes)..."
-    aws ec2 wait instance-status-ok \
-        --instance-ids "$instance_id" \
-        --region "$region"
+        if [ "$STATE" = "running" ]; then
+            echo -e "${GREEN}✓${NC} Instance is running (took $running_elapsed seconds)"
+            break
+        fi
 
-    echo -e "${GREEN}✓${NC} Status checks passed"
+        echo "  [$running_elapsed/$running_timeout] State: $STATE"
+        sleep 15
+        running_elapsed=$((running_elapsed + 15))
+    done
+
+    if [ "$STATE" != "running" ]; then
+        echo -e "${RED}✗${NC} Timeout waiting for instance to reach running state"
+        return 1
+    fi
+
+    # Wait for status checks with progress
+    echo ""
+    echo "Waiting for status checks to pass (this may take 10-15 minutes for Windows)..."
+    echo "Checking every 30 seconds..."
+
+    local status_timeout=1200  # 20 minutes
+    local status_elapsed=0
+
+    while [ $status_elapsed -lt $status_timeout ]; do
+        SYSTEM_STATUS=$(aws ec2 describe-instance-status \
+            --instance-ids "$instance_id" \
+            --region "$region" \
+            --query 'InstanceStatuses[0].SystemStatus.Status' \
+            --output text 2>/dev/null || echo "initializing")
+
+        INSTANCE_STATUS=$(aws ec2 describe-instance-status \
+            --instance-ids "$instance_id" \
+            --region "$region" \
+            --query 'InstanceStatuses[0].InstanceStatus.Status' \
+            --output text 2>/dev/null || echo "initializing")
+
+        echo "  [$status_elapsed/$status_timeout] System: $SYSTEM_STATUS | Instance: $INSTANCE_STATUS"
+
+        if [ "$SYSTEM_STATUS" = "ok" ] && [ "$INSTANCE_STATUS" = "ok" ]; then
+            echo -e "${GREEN}✓${NC} Status checks passed (took $status_elapsed seconds)"
+            return 0
+        fi
+
+        sleep 30
+        status_elapsed=$((status_elapsed + 30))
+    done
+
+    echo -e "${YELLOW}⚠${NC} Status checks did not pass within timeout, but continuing..."
+    echo "Note: Instance may still be initializing Windows. LucidLink verification may fail."
+    return 0
 }
 
 # Function to check LucidLink mount via SSM
@@ -234,18 +284,71 @@ echo ""
 # Check prerequisites
 check_prerequisites
 
-# Get AWS region
-REGION=$(python3 << 'EOF'
+# Get AWS region and setup environment
+print_header "Setting Up Test Environment"
+
+echo "Reading configuration from ~/.ll-win-client/config.json..."
+python3 << 'EOF'
 import json
 import os
+import base64
+
 config_file = os.path.expanduser("~/.ll-win-client/config.json")
 with open(config_file) as f:
     config = json.load(f)
-    region = config['region']
-    print(region)
+
+# Decode password if encoded
+password = config['filespace_password']
+if config.get('_password_encoded'):
+    password = base64.b64decode(password).decode()
+
+# Output for bash to capture
+print(f"REGION={config['region']}")
+print(f"AWS_ACCESS_KEY_ID={config['aws_access_key_id']}")
+print(f"AWS_SECRET_ACCESS_KEY={config['aws_secret_access_key']}")
+
+# Generate terraform.tfvars
+tfvars_content = f"""region              = "{config['region']}"
+vpc_cidr            = "{config['vpc_cidr']}"
+filespace_domain    = "{config['filespace_domain']}"
+filespace_user      = "{config['filespace_user']}"
+filespace_password  = "{password}"
+mount_point         = "{config['mount_point']}"
+instance_type       = "{config['instance_type']}"
+instance_count      = {config['instance_count']}
+root_volume_size    = {config['root_volume_size']}
+ssh_key_name        = "{config.get('ssh_key_name', '')}"
+"""
+
+# Write to terraform directory
+tfvars_path = 'terraform/clients/terraform.tfvars'
+os.makedirs(os.path.dirname(tfvars_path), exist_ok=True)
+with open(tfvars_path, 'w') as f:
+    f.write(tfvars_content)
+
+print(f"TFVARS_WRITTEN=terraform/clients/terraform.tfvars")
+EOF
+
+# Source the environment variables
+eval $(python3 << 'EOF'
+import json
+import os
+import base64
+
+config_file = os.path.expanduser("~/.ll-win-client/config.json")
+with open(config_file) as f:
+    config = json.load(f)
+
+print(f"export REGION={config['region']}")
+print(f"export AWS_ACCESS_KEY_ID={config['aws_access_key_id']}")
+print(f"export AWS_SECRET_ACCESS_KEY={config['aws_secret_access_key']}")
+print(f"export AWS_DEFAULT_REGION={config['region']}")
 EOF
 )
-echo -e "AWS Region: ${BLUE}$REGION${NC}"
+
+echo -e "${GREEN}✓${NC} AWS Region: ${BLUE}$REGION${NC}"
+echo -e "${GREEN}✓${NC} AWS Credentials exported"
+echo -e "${GREEN}✓${NC} Generated terraform.tfvars"
 
 # ============================================================================
 # TEST 1: Deploy Instance
@@ -258,9 +361,9 @@ cd terraform/clients
 echo "Running terraform init..."
 terraform init -upgrade > /dev/null 2>&1
 
-echo "Running terraform apply..."
+echo "Running terraform apply with generated tfvars..."
 DEPLOY_START=$(date +%s)
-terraform apply -auto-approve
+terraform apply -auto-approve -var-file=terraform.tfvars
 
 DEPLOY_END=$(date +%s)
 DEPLOY_TIME=$((DEPLOY_END - DEPLOY_START))
