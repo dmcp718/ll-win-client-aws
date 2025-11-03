@@ -1,4 +1,3 @@
-<powershell>
 # ==============================================================================
 # LucidLink Windows Client Initialization Script
 # ==============================================================================
@@ -453,4 +452,3 @@ if (Test-Path "${mount_point}") {
 }
 
 Write-Log "Initialization script completed"
-</powershell>
