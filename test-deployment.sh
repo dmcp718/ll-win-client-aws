@@ -39,10 +39,10 @@ print_result() {
 
     if [ "$result" = "PASS" ]; then
         echo -e "${GREEN}✓ PASS${NC} - $test_name"
-        ((PASSED++))
+        PASSED=$((PASSED + 1))
     else
         echo -e "${RED}✗ FAIL${NC} - $test_name"
-        ((FAILED++))
+        FAILED=$((FAILED + 1))
     fi
 }
 
@@ -364,11 +364,12 @@ terraform init -upgrade > /dev/null 2>&1
 echo "Running terraform apply with generated tfvars..."
 DEPLOY_START=$(date +%s)
 terraform apply -auto-approve -var-file=terraform.tfvars
+TERRAFORM_EXIT=$?
 
 DEPLOY_END=$(date +%s)
 DEPLOY_TIME=$((DEPLOY_END - DEPLOY_START))
 
-if [ $? -eq 0 ]; then
+if [ $TERRAFORM_EXIT -eq 0 ]; then
     echo -e "${GREEN}✓${NC} Deployment successful"
     print_result "Deploy Infrastructure" "PASS"
     echo "Deployment time: $((DEPLOY_TIME / 60)) minutes $((DEPLOY_TIME % 60)) seconds"
@@ -483,11 +484,12 @@ cd terraform/clients
 echo "Running terraform destroy..."
 DESTROY_START=$(date +%s)
 terraform destroy -auto-approve
+TERRAFORM_EXIT=$?
 
 DESTROY_END=$(date +%s)
 DESTROY_TIME=$((DESTROY_END - DESTROY_START))
 
-if [ $? -eq 0 ]; then
+if [ $TERRAFORM_EXIT -eq 0 ]; then
     echo -e "${GREEN}✓${NC} Destruction successful"
     print_result "Destroy Infrastructure" "PASS"
     echo "Destroy time: $((DESTROY_TIME / 60)) minutes $((DESTROY_TIME % 60)) seconds"
