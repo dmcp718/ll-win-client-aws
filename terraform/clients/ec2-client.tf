@@ -192,6 +192,29 @@ resource "aws_iam_role_policy" "windows_client_dcv_license" {
   })
 }
 
+# S3 policy for userdata scripts
+resource "aws_iam_role_policy" "windows_client_userdata_s3" {
+  name = "ll-win-client-userdata-s3"
+  role = aws_iam_role.windows_client.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.userdata_scripts.arn,
+          "${aws_s3_bucket.userdata_scripts.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
 # Attach SSM policy for remote management
 resource "aws_iam_role_policy_attachment" "windows_client_ssm" {
   role       = aws_iam_role.windows_client.name
@@ -275,15 +298,10 @@ resource "aws_launch_template" "windows_client" {
     enabled = true
   }
 
-  # PowerShell userdata script (minified to stay under 16KB limit)
-  user_data = var.filespace_domain != "" ? base64encode(templatefile("${path.module}/templates/windows-userdata-min.ps1", {
-    filespace_domain     = var.filespace_domain
-    filespace_user       = var.filespace_user
-    filespace_password   = var.filespace_password
-    mount_point          = var.mount_point
-    aws_region           = var.aws_region
-    installer_url        = var.lucidlink_installer_url
-    secret_arn           = var.filespace_domain != "" ? aws_secretsmanager_secret.lucidlink_credentials[0].arn : ""
+  # Minimal userdata - downloads full setup script from S3 (no size limits)
+  user_data = var.filespace_domain != "" ? base64encode(templatefile("${path.module}/templates/minimal-userdata.ps1", {
+    bucket_name = aws_s3_bucket.userdata_scripts.bucket
+    aws_region  = var.aws_region
   })) : base64encode("<powershell>\nWrite-Host 'LucidLink configuration not provided'\n</powershell>")
 
   tag_specifications {
