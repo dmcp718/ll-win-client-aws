@@ -314,30 +314,6 @@ function Install-Application {
 #     -WingetId "VideoLAN.VLC" `
 #     -ChocoPackage "vlc"
 
-# Visual Studio Code (code editor)
-# Install-Application `
-#     -Name "Visual Studio Code" `
-#     -WingetId "Microsoft.VisualStudioCode" `
-#     -ChocoPackage "vscode"
-
-# Notepad++ (text editor)
-# Install-Application `
-#     -Name "Notepad++" `
-#     -WingetId "Notepad++.Notepad++" `
-#     -ChocoPackage "notepadplusplus"
-
-# Git for Windows (version control)
-# Install-Application `
-#     -Name "Git for Windows" `
-#     -WingetId "Git.Git" `
-#     -ChocoPackage "git"
-
-# Python 3 (programming language)
-# Install-Application `
-#     -Name "Python 3" `
-#     -WingetId "Python.Python.3.12" `
-#     -ChocoPackage "python"
-
 # ==============================================================================
 # ADD YOUR OWN APPLICATIONS HERE
 # ==============================================================================

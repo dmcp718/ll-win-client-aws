@@ -163,7 +163,7 @@ uv run ll-win-client-aws.py --help
 - **CloudWatch Logs** for instance monitoring
 - **Optional Application Framework** - Install additional software automatically
   - Adobe Creative Cloud
-  - 7-Zip, VLC, VS Code, Notepad++, Git, Python
+  - 7-Zip, VLC
   - Easy to customize for your own applications
 
 ### Remote Access
@@ -390,8 +390,7 @@ The deployment includes a flexible framework for installing additional applicati
 
 **Available Applications** (all commented out by default):
 - Adobe Creative Cloud (for graphics/video work)
-- 7-Zip, VLC Media Player, Notepad++
-- Visual Studio Code, Git for Windows, Python 3
+- 7-Zip, VLC Media Player
 
 **To Enable Applications:**
 
