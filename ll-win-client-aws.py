@@ -294,6 +294,136 @@ class LLWinClientAWSSetup:
         # Examples: t3.large, c6id.xlarge, m5n.xlarge, r5dn.2xlarge
         return bool(re.match(r'^[a-z]+[0-9]+[a-z]*\.[a-z0-9]+$', instance_type.lower()))
 
+    def fetch_gpu_instance_types(self, region: str = None) -> List[Dict]:
+        """Fetch GPU instance types (g-series) with detailed specifications from AWS API"""
+        try:
+            import boto3
+
+            console.print("[dim]Fetching GPU instance types from AWS...[/dim]")
+
+            # Use provided region or default
+            if not region:
+                region = self.config.get('region', 'us-east-1')
+
+            # Set up AWS credentials
+            session_kwargs = {'region_name': region}
+            if self.config.get('aws_access_key_id'):
+                session_kwargs['aws_access_key_id'] = self.config['aws_access_key_id']
+            if self.config.get('aws_secret_access_key'):
+                session_kwargs['aws_secret_access_key'] = self.config['aws_secret_access_key']
+
+            ec2 = boto3.client('ec2', **session_kwargs)
+
+            # Fetch g-series instance types with details
+            gpu_instances = []
+            paginator = ec2.get_paginator('describe_instance_types')
+
+            # Filter for g-series instances (GPU instances)
+            filters = [{'Name': 'instance-type', 'Values': ['g*']}]
+
+            for page in paginator.paginate(Filters=filters):
+                for instance in page['InstanceTypes']:
+                    instance_type = instance['InstanceType']
+
+                    # Get GPU info
+                    gpu_info = instance.get('GpuInfo', {})
+                    gpus = gpu_info.get('Gpus', [])
+
+                    if gpus:  # Only include if it has GPU info
+                        gpu_count = sum(gpu.get('Count', 0) for gpu in gpus)
+                        gpu_manufacturer = gpus[0].get('Manufacturer', 'Unknown') if gpus else 'Unknown'
+                        gpu_name = gpus[0].get('Name', 'Unknown') if gpus else 'Unknown'
+                        gpu_memory = gpus[0].get('MemoryInfo', {}).get('SizeInMiB', 0) if gpus else 0
+                        gpu_memory_gb = gpu_memory // 1024 if gpu_memory else 0
+
+                        gpu_instances.append({
+                            'type': instance_type,
+                            'vcpu': instance.get('VCpuInfo', {}).get('DefaultVCpus', 0),
+                            'memory_mb': instance.get('MemoryInfo', {}).get('SizeInMiB', 0),
+                            'memory_gb': instance.get('MemoryInfo', {}).get('SizeInMiB', 0) // 1024,
+                            'gpu_count': gpu_count,
+                            'gpu_manufacturer': gpu_manufacturer,
+                            'gpu_name': gpu_name,
+                            'gpu_memory_gb': gpu_memory_gb,
+                            'network_performance': instance.get('NetworkInfo', {}).get('NetworkPerformance', 'Unknown')
+                        })
+
+            # Sort by instance family, then by size
+            gpu_instances.sort(key=lambda x: (x['type'].split('.')[0], x['vcpu']))
+
+            logger.info(f"Found {len(gpu_instances)} GPU instance types in {region}")
+            console.print(f"[{self.colors['success']}]✓ Found {len(gpu_instances)} GPU instance types available in {region}[/]")
+
+            return gpu_instances
+
+        except ImportError:
+            logger.warning("boto3 not available, using fallback GPU instance list")
+            console.print(f"[{self.colors['warning']}]Using default GPU instance types (boto3 not available)[/]")
+            return self._get_fallback_gpu_instances()
+        except Exception as e:
+            logger.warning(f"Could not fetch GPU instance types: {e}")
+            console.print(f"[{self.colors['warning']}]Could not fetch from AWS, using default GPU instance types[/]")
+            return self._get_fallback_gpu_instances()
+
+    def _get_fallback_gpu_instances(self) -> List[Dict]:
+        """Fallback list of GPU instances if AWS API is unavailable"""
+        return [
+            {
+                'type': 'g4dn.xlarge',
+                'vcpu': 4,
+                'memory_gb': 16,
+                'gpu_count': 1,
+                'gpu_manufacturer': 'NVIDIA',
+                'gpu_name': 'T4',
+                'gpu_memory_gb': 16
+            },
+            {
+                'type': 'g4dn.2xlarge',
+                'vcpu': 8,
+                'memory_gb': 32,
+                'gpu_count': 1,
+                'gpu_manufacturer': 'NVIDIA',
+                'gpu_name': 'T4',
+                'gpu_memory_gb': 16
+            },
+            {
+                'type': 'g4dn.4xlarge',
+                'vcpu': 16,
+                'memory_gb': 64,
+                'gpu_count': 1,
+                'gpu_manufacturer': 'NVIDIA',
+                'gpu_name': 'T4',
+                'gpu_memory_gb': 16
+            },
+            {
+                'type': 'g5.xlarge',
+                'vcpu': 4,
+                'memory_gb': 16,
+                'gpu_count': 1,
+                'gpu_manufacturer': 'NVIDIA',
+                'gpu_name': 'A10G',
+                'gpu_memory_gb': 24
+            },
+            {
+                'type': 'g5.2xlarge',
+                'vcpu': 8,
+                'memory_gb': 32,
+                'gpu_count': 1,
+                'gpu_manufacturer': 'NVIDIA',
+                'gpu_name': 'A10G',
+                'gpu_memory_gb': 24
+            },
+            {
+                'type': 'g5.4xlarge',
+                'vcpu': 16,
+                'memory_gb': 64,
+                'gpu_count': 1,
+                'gpu_manufacturer': 'NVIDIA',
+                'gpu_name': 'A10G',
+                'gpu_memory_gb': 24
+            }
+        ]
+
     def pre_deployment_checks(self) -> bool:
         """Run all pre-deployment validation checks"""
         console.print("\n[bold]Running Pre-Deployment Checks...[/bold]\n")
@@ -410,52 +540,60 @@ class LLWinClientAWSSetup:
         # Step 5: Instance Configuration
         console.print("[bold cyan]Step 5: Instance Configuration[/bold cyan]")
 
-        # GPU instance types compatible with Adobe Creative Cloud
-        gpu_instance_types = [
-            {
-                'type': 'g4dn.xlarge',
-                'vcpu': '4 vCPUs',
-                'memory': '16 GB RAM',
-                'gpu': '1x NVIDIA T4 GPU (16 GB)',
-                'price': '~$0.526/hour'
-            },
-            {
-                'type': 'g4dn.2xlarge',
-                'vcpu': '8 vCPUs',
-                'memory': '32 GB RAM',
-                'gpu': '1x NVIDIA T4 GPU (16 GB)',
-                'price': '~$0.752/hour'
-            },
-            {
-                'type': 'g4dn.4xlarge',
-                'vcpu': '16 vCPUs',
-                'memory': '64 GB RAM',
-                'gpu': '1x NVIDIA T4 GPU (16 GB)',
-                'price': '~$1.204/hour'
-            }
-        ]
+        # Fetch GPU instance types dynamically from AWS
+        gpu_instance_types = self.fetch_gpu_instance_types(config.get('region'))
 
-        console.print("\n[bold]Available GPU Instance Types (Adobe Creative Cloud compatible):[/bold]")
+        if not gpu_instance_types:
+            console.print(f"[{self.colors['error']}]No GPU instance types found. Please check your AWS configuration.[/]")
+            return None
+
+        # Display available GPU instances organized by family
+        console.print("\n[bold]Available GPU Instance Types:[/bold]")
+
+        # Group by instance family
+        families = {}
+        for instance in gpu_instance_types:
+            family = instance['type'].split('.')[0]
+            if family not in families:
+                families[family] = []
+            families[family].append(instance)
+
+        # Display with grouping
         for idx, instance in enumerate(gpu_instance_types, 1):
-            console.print(f"  {idx}. [cyan]{instance['type']}[/cyan] - {instance['vcpu']}, {instance['memory']}, {instance['gpu']}")
-            console.print(f"     [dim]{instance['price']} (on-demand pricing)[/dim]")
+            gpu_desc = f"{instance['gpu_count']}x {instance['gpu_manufacturer']} {instance['gpu_name']}"
+            if instance.get('gpu_memory_gb'):
+                gpu_desc += f" ({instance['gpu_memory_gb']} GB)"
 
-        # Get existing instance type index or default to 1 (g4dn.xlarge)
+            console.print(f"  {idx:2d}. [cyan]{instance['type']:15s}[/cyan] - {instance['vcpu']:2d} vCPUs, {instance['memory_gb']:3d} GB RAM, {gpu_desc}")
+
+        # Mark recommended instances
+        recommended = ['g4dn.xlarge', 'g4dn.2xlarge', 'g4dn.4xlarge']
+        rec_indices = [idx for idx, inst in enumerate(gpu_instance_types, 1) if inst['type'] in recommended]
+        if rec_indices:
+            console.print(f"\n[dim]Recommended for Adobe Creative Cloud: {', '.join(str(i) for i in rec_indices)}[/dim]")
+
+        # Get existing instance type index or default to 1
         existing_type = existing_config.get('instance_type', 'g4dn.xlarge')
         default_choice = next((idx for idx, inst in enumerate(gpu_instance_types, 1) if inst['type'] == existing_type), 1)
 
+        # Build choices list
+        valid_choices = [str(i) for i in range(1, len(gpu_instance_types) + 1)]
+
         while True:
-            choice = IntPrompt.ask(
-                "\nSelect instance type",
-                default=default_choice,
-                choices=["1", "2", "3"]
-            )
-            if 1 <= choice <= 3:
-                config['instance_type'] = gpu_instance_types[choice - 1]['type']
-                console.print(f"[{self.colors['success']}]✓ Selected: {config['instance_type']}[/]")
-                break
-            else:
-                console.print(f"[{self.colors['error']}]Please select 1, 2, or 3[/]")
+            try:
+                choice = IntPrompt.ask(
+                    f"\nSelect instance type (1-{len(gpu_instance_types)})",
+                    default=default_choice,
+                    choices=valid_choices
+                )
+                if 1 <= choice <= len(gpu_instance_types):
+                    config['instance_type'] = gpu_instance_types[choice - 1]['type']
+                    console.print(f"[{self.colors['success']}]✓ Selected: {config['instance_type']}[/]")
+                    break
+                else:
+                    console.print(f"[{self.colors['error']}]Please select a number between 1 and {len(gpu_instance_types)}[/]")
+            except (ValueError, KeyboardInterrupt):
+                console.print(f"[{self.colors['error']}]Invalid selection[/]")
 
         config['instance_count'] = IntPrompt.ask(
             "Number of Client Instances (1-10)",
