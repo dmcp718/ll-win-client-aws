@@ -346,6 +346,7 @@ uv run ll-win-client-aws.py
 uv run ll-win-client-aws.py
 # Choose Option 7: Start All Instances
 # Resumes stopped instances
+# Note: DCV connection files are automatically regenerated with new public IPs
 ```
 
 ### Destroy Everything
@@ -409,6 +410,7 @@ terraform destroy # Remove all resources
 
 **Stop vs Destroy:**
 - **Stop**: Saves compute costs (~$0.50-1.20/hour), keeps storage (~$0.01/hour), can resume work
+  - Note: Public IPs change on start; DCV files are automatically regenerated
 - **Destroy**: Removes everything, no costs, cannot resume (must redeploy)
 
 ---
@@ -544,4 +546,4 @@ MIT License - See LICENSE file for details.
 - **AWS DCV Client**: https://download.nice-dcv.com/
 - **NVIDIA AMI**: https://aws.amazon.com/marketplace/pp/prodview-f4reygwmtxipu
 
-**Last Updated**: 2025-11-02
+**Last Updated**: 2025-11-03
