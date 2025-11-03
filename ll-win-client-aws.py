@@ -1927,14 +1927,58 @@ preferred-video-codec=h264
                 Prompt.ask("Press Enter to continue")
                 return
 
-            # Stop instances
-            console.print(f"\n[bold yellow]Stopping instances...[/bold yellow]")
-            ec2.stop_instances(InstanceIds=running_instances)
+            # Attempt graceful shutdown via SSM first
+            console.print(f"\n[bold yellow]Initiating graceful Windows shutdown...[/bold yellow]")
 
-            # Wait for stopped state
-            with console.status("[bold yellow]Waiting for instances to stop...[/bold yellow]"):
-                waiter = ec2.get_waiter('instance_stopped')
-                waiter.wait(InstanceIds=running_instances)
+            try:
+                ssm = boto3.client('ssm', region_name=region)
+
+                # Send shutdown command to Windows
+                console.print(f"[{self.colors['info']}]Sending shutdown command via AWS Systems Manager...[/]")
+                ssm.send_command(
+                    InstanceIds=running_instances,
+                    DocumentName='AWS-RunPowerShellScript',
+                    Parameters={
+                        'commands': [
+                            'shutdown /s /t 30 /c "Graceful shutdown initiated by LucidLink deployment tool"'
+                        ]
+                    },
+                    TimeoutSeconds=60
+                )
+
+                console.print(f"[{self.colors['success']}]✓ Shutdown command sent to Windows[/]")
+                console.print(f"[dim]Windows will shutdown gracefully in 30 seconds...[/dim]")
+
+                # Wait for instances to stop (Windows shutdown will trigger EC2 stop)
+                console.print(f"\n[bold yellow]Waiting for graceful shutdown to complete...[/bold yellow]")
+                with console.status("[bold yellow]Monitoring shutdown progress...[/bold yellow]"):
+                    waiter = ec2.get_waiter('instance_stopped')
+                    try:
+                        # Wait up to 5 minutes for graceful shutdown
+                        waiter.wait(
+                            InstanceIds=running_instances,
+                            WaiterConfig={'Delay': 15, 'MaxAttempts': 20}
+                        )
+                        console.print(f"[{self.colors['success']}]✓ Instances shut down gracefully[/]")
+                    except Exception as wait_error:
+                        # Graceful shutdown timed out, force stop
+                        logger.warning(f"Graceful shutdown timed out, forcing stop: {wait_error}")
+                        console.print(f"\n[{self.colors['warning']}]Graceful shutdown timed out, forcing stop...[/]")
+                        ec2.stop_instances(InstanceIds=running_instances)
+                        waiter.wait(InstanceIds=running_instances)
+                        console.print(f"[{self.colors['warning']}]⚠ Instances force-stopped[/]")
+
+            except Exception as ssm_error:
+                # SSM command failed, fall back to direct EC2 stop
+                logger.warning(f"SSM graceful shutdown failed, using direct stop: {ssm_error}")
+                console.print(f"\n[{self.colors['warning']}]Graceful shutdown unavailable, using direct stop...[/]")
+                console.print(f"[dim]Reason: {str(ssm_error)}[/dim]")
+
+                ec2.stop_instances(InstanceIds=running_instances)
+                with console.status("[bold yellow]Waiting for instances to stop...[/bold yellow]"):
+                    waiter = ec2.get_waiter('instance_stopped')
+                    waiter.wait(InstanceIds=running_instances)
+                console.print(f"[{self.colors['warning']}]⚠ Instances stopped (non-graceful)[/]")
 
             console.print(f"\n[{self.colors['success']}]✓ Successfully stopped {len(running_instances)} instance(s)[/]")
             console.print(f"\n[{self.colors['info']}]To resume work, use 'Start All Instances' from the main menu.[/]")
