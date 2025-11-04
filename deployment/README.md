@@ -22,12 +22,37 @@ After extensive testing, we found that:
 ./deploy-windows-client.sh i-04a97c9efaa7eb3f3 us-east-1
 ```
 
+### Controlling Optional Software
+
+Use environment variables to enable/disable optional software:
+
+```bash
+# Disable VLC
+INSTALL_VLC=0 ./deploy-windows-client.sh i-xxx us-east-1
+
+# Disable Adobe Creative Cloud
+INSTALL_ADOBE_CC=0 ./deploy-windows-client.sh i-xxx us-east-1
+
+# Enable 7-Zip and Notepad++
+INSTALL_7ZIP=1 INSTALL_NOTEPAD_PP=1 ./deploy-windows-client.sh i-xxx us-east-1
+
+# Install only core software (no optional apps)
+INSTALL_VLC=0 INSTALL_ADOBE_CC=0 ./deploy-windows-client.sh i-xxx us-east-1
+```
+
 ### What Gets Installed
 
+**Core Software (Always Installed):**
 1. **AWS CLI v2** - For retrieving credentials from Secrets Manager
 2. **Amazon DCV Server** - Remote desktop on port 8443
 3. **Google Chrome** - Web browser
 4. **LucidLink** - Filespace client with automatic mount configuration
+
+**Optional Software (Controlled by Environment Variables):**
+- **VLC Media Player** - `INSTALL_VLC=1` (default: **enabled**)
+- **Adobe Creative Cloud Desktop** - `INSTALL_ADOBE_CC=1` (default: **enabled**)
+- **7-Zip** - `INSTALL_7ZIP=1` (default: disabled)
+- **Notepad++** - `INSTALL_NOTEPAD_PP=1` (default: disabled)
 
 ## Architecture
 

@@ -3,6 +3,18 @@
 # Deploy Windows Client Configuration via AWS SSM
 # Simple, pragmatic approach using direct SSM commands
 #
+# Usage:
+#   ./deploy-windows-client.sh [instance-id] [region]
+#
+# Optional Software Control (via environment variables):
+#   INSTALL_VLC=0 ./deploy-windows-client.sh          # Disable VLC
+#   INSTALL_ADOBE_CC=0 ./deploy-windows-client.sh     # Disable Adobe CC
+#   INSTALL_7ZIP=1 ./deploy-windows-client.sh         # Enable 7-Zip
+#   INSTALL_NOTEPAD_PP=1 ./deploy-windows-client.sh   # Enable Notepad++
+#
+# Combine multiple options:
+#   INSTALL_VLC=1 INSTALL_ADOBE_CC=1 INSTALL_7ZIP=1 ./deploy-windows-client.sh
+#
 set -e
 
 # Colors for output
@@ -17,6 +29,12 @@ INSTANCE_ID="${1:-i-04a97c9efaa7eb3f3}"
 REGION="${2:-us-east-1}"
 SECRET_ARN="arn:aws:secretsmanager:us-east-1:534711626568:secret:ll-win-client/lucidlink/max.lucid-demo/credentials-1iu1Mp"
 MOUNT_POINT="L:"
+
+# Optional Software Configuration (set to 1 to enable, 0 to disable)
+INSTALL_VLC="${INSTALL_VLC:-1}"              # VLC Media Player (default: enabled)
+INSTALL_ADOBE_CC="${INSTALL_ADOBE_CC:-1}"    # Adobe Creative Cloud (default: enabled)
+INSTALL_7ZIP="${INSTALL_7ZIP:-0}"            # 7-Zip (default: disabled)
+INSTALL_NOTEPAD_PP="${INSTALL_NOTEPAD_PP:-0}" # Notepad++ (default: disabled)
 
 # Helper function to run SSM command and wait for result
 run_ssm() {
@@ -102,6 +120,12 @@ main() {
     echo "=================================================="
     echo "Instance ID: $INSTANCE_ID"
     echo "Region:      $REGION"
+    echo ""
+    echo "Optional Software:"
+    echo "  VLC Media Player:       $([ "$INSTALL_VLC" = "1" ] && echo -e "${GREEN}ENABLED${NC}" || echo -e "${YELLOW}DISABLED${NC}")"
+    echo "  Adobe Creative Cloud:   $([ "$INSTALL_ADOBE_CC" = "1" ] && echo -e "${GREEN}ENABLED${NC}" || echo -e "${YELLOW}DISABLED${NC}")"
+    echo "  7-Zip:                  $([ "$INSTALL_7ZIP" = "1" ] && echo -e "${GREEN}ENABLED${NC}" || echo -e "${YELLOW}DISABLED${NC}")"
+    echo "  Notepad++:              $([ "$INSTALL_NOTEPAD_PP" = "1" ] && echo -e "${GREEN}ENABLED${NC}" || echo -e "${YELLOW}DISABLED${NC}")"
     echo "=================================================="
     echo
 
@@ -150,7 +174,77 @@ main() {
         'Start-Process $chromePath -ArgumentList "/silent /install" -Wait' \
         'Write-Host "Chrome installed successfully"'
 
-    # Step 4: Install LucidLink (MSI version - WORKING)
+    # ==================================================================
+    # OPTIONAL SOFTWARE INSTALLATIONS
+    # ==================================================================
+
+    # Step 4: Install VLC Media Player (if enabled)
+    if [ "$INSTALL_VLC" = "1" ]; then
+        run_ssm "Installing VLC Media Player" \
+            'Write-Host "Downloading VLC..."' \
+            '$vlcUrl = "https://get.videolan.org/vlc/last/win64/vlc-3.0.20-win64.msi"' \
+            '$vlcPath = "C:\Temp\vlc.msi"' \
+            'Invoke-WebRequest -Uri $vlcUrl -OutFile $vlcPath -TimeoutSec 300' \
+            'Write-Host "Installing VLC..."' \
+            'Start-Process msiexec.exe -ArgumentList "/i `"$vlcPath`" /qn /norestart" -Wait -NoNewWindow' \
+            'Write-Host "VLC installed successfully"' \
+            '$vlcExe = "C:\Program Files\VideoLAN\VLC\vlc.exe"' \
+            'if (Test-Path $vlcExe) { Write-Host "Verified: VLC at $vlcExe" }'
+    else
+        echo -e "  ${YELLOW}Skipping VLC installation (disabled)${NC}"
+    fi
+
+    # Step 5: Install Adobe Creative Cloud Desktop (if enabled)
+    if [ "$INSTALL_ADOBE_CC" = "1" ]; then
+        run_ssm "Installing Adobe Creative Cloud Desktop" \
+            'Write-Host "Downloading Adobe Creative Cloud..."' \
+            '$adobeUrl = "https://ccmdl.adobe.com/AdobeProducts/KCCC/CCD/5_8/win64/ACCCx5_8_0_559.zip"' \
+            '$adobeZip = "C:\Temp\adobe-cc.zip"' \
+            '$adobeDir = "C:\Temp\adobe-cc"' \
+            'Invoke-WebRequest -Uri $adobeUrl -OutFile $adobeZip -TimeoutSec 600' \
+            'Write-Host "Extracting Adobe Creative Cloud..."' \
+            'Expand-Archive -Path $adobeZip -DestinationPath $adobeDir -Force' \
+            'Write-Host "Installing Adobe Creative Cloud Desktop..."' \
+            '$setupPath = Get-ChildItem -Path $adobeDir -Recurse -Filter "Set-up.exe" | Select-Object -First 1' \
+            'if ($setupPath) {' \
+            '    Start-Process $setupPath.FullName -ArgumentList "--silent" -Wait' \
+            '    Write-Host "Adobe Creative Cloud Desktop installed"' \
+            '} else {' \
+            '    Write-Host "WARNING: Adobe setup.exe not found"' \
+            '}'
+    else
+        echo -e "  ${YELLOW}Skipping Adobe Creative Cloud installation (disabled)${NC}"
+    fi
+
+    # Step 5b: Install 7-Zip (if enabled)
+    if [ "$INSTALL_7ZIP" = "1" ]; then
+        run_ssm "Installing 7-Zip" \
+            'Write-Host "Downloading 7-Zip..."' \
+            '$zipUrl = "https://www.7-zip.org/a/7z2301-x64.msi"' \
+            '$zipPath = "C:\Temp\7zip.msi"' \
+            'Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -TimeoutSec 300' \
+            'Write-Host "Installing 7-Zip..."' \
+            'Start-Process msiexec.exe -ArgumentList "/i `"$zipPath`" /qn /norestart" -Wait -NoNewWindow' \
+            'Write-Host "7-Zip installed successfully"'
+    fi
+
+    # Step 5c: Install Notepad++ (if enabled)
+    if [ "$INSTALL_NOTEPAD_PP" = "1" ]; then
+        run_ssm "Installing Notepad++" \
+            'Write-Host "Downloading Notepad++..."' \
+            '$nppUrl = "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.6.2/npp.8.6.2.Installer.x64.exe"' \
+            '$nppPath = "C:\Temp\npp-installer.exe"' \
+            'Invoke-WebRequest -Uri $nppUrl -OutFile $nppPath -TimeoutSec 300' \
+            'Write-Host "Installing Notepad++..."' \
+            'Start-Process $nppPath -ArgumentList "/S" -Wait' \
+            'Write-Host "Notepad++ installed successfully"'
+    fi
+
+    # ==================================================================
+    # CORE SOFTWARE (Always Installed)
+    # ==================================================================
+
+    # Step 6: Install LucidLink (MSI version - WORKING)
     run_ssm "Installing LucidLink" \
         'Write-Host "Downloading LucidLink MSI..."' \
         '$installerUrl = "https://www.lucidlink.com/download/new-ll-latest/win/stable/"' \
@@ -167,7 +261,7 @@ main() {
         '$lucidPath = "C:\Program Files\LucidLink\bin\lucid.exe"' \
         'if (Test-Path $lucidPath) { Write-Host "LucidLink installed successfully" } else { Write-Host "WARNING: Installation may have failed" }'
 
-    # Step 5: Configure LucidLink as Windows Service
+    # Step 7: Configure LucidLink as Windows Service
     run_ssm "Configuring LucidLink filespace" \
         '$secretArn = "'"$SECRET_ARN"'"' \
         '$region = "'"$REGION"'"' \
@@ -196,7 +290,7 @@ main() {
         '    Write-Host "ERROR: LucidLink not installed"' \
         '}'
 
-    # Step 6: Verify DCV
+    # Step 8: Verify DCV
     run_ssm "Verifying DCV status" \
         'Write-Host "=== DCV Services ==="' \
         'Get-Service -Name DCV* | Select-Object Name,Status,StartType | Format-Table' \
@@ -225,10 +319,19 @@ main() {
     echo -e "Password: ${BLUE}Admin123${NC}"
     echo "=================================================="
     echo
+    echo "Installed Software:"
+    echo "  ✓ Amazon DCV Server"
+    echo "  ✓ Google Chrome"
+    echo "  ✓ LucidLink (mounted to $MOUNT_POINT)"
+    [ "$INSTALL_VLC" = "1" ] && echo "  ✓ VLC Media Player"
+    [ "$INSTALL_ADOBE_CC" = "1" ] && echo "  ✓ Adobe Creative Cloud Desktop"
+    [ "$INSTALL_7ZIP" = "1" ] && echo "  ✓ 7-Zip"
+    [ "$INSTALL_NOTEPAD_PP" = "1" ] && echo "  ✓ Notepad++"
+    echo
     echo "Next steps:"
     echo "  1. Connect via DCV client or browser"
     echo "  2. Verify LucidLink mount point: $MOUNT_POINT"
-    echo "  3. Test Chrome installation"
+    [ "$INSTALL_ADOBE_CC" = "1" ] && echo "  3. Sign in to Adobe Creative Cloud Desktop"
     echo
     echo "DCV Connection File:"
     echo "  Update your .dcv file with these credentials"
