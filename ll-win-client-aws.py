@@ -1392,13 +1392,29 @@ preferred-video-codec=h264
                     instance_name = f"ll-win-client-{idx + 1}"
                     console.print(f"\n  [{self.colors['info']}]Deploying software to {instance_name} ({instance_id})...[/]")
 
-                    # Wait for SSM to be available
-                    console.print(f"    Waiting for SSM agent...")
-                    max_wait = 120  # 2 minutes
+                    # Wait for instance to be fully ready
+                    console.print(f"    Waiting for instance to be ready...")
+                    max_wait = 300  # 5 minutes
                     wait_interval = 10
+                    ssm_online = False
+
                     for attempt in range(max_wait // wait_interval):
                         try:
-                            result = subprocess.run(
+                            # Check EC2 instance state
+                            ec2_result = subprocess.run(
+                                ['aws', 'ec2', 'describe-instances',
+                                 '--instance-ids', instance_id,
+                                 '--region', region,
+                                 '--query', 'Reservations[0].Instances[0].State.Name',
+                                 '--output', 'text'],
+                                capture_output=True,
+                                text=True,
+                                timeout=10
+                            )
+                            instance_state = ec2_result.stdout.strip()
+
+                            # Check SSM agent status
+                            ssm_result = subprocess.run(
                                 ['aws', 'ssm', 'describe-instance-information',
                                  '--filters', f'Key=InstanceIds,Values={instance_id}',
                                  '--region', region,
@@ -1408,12 +1424,23 @@ preferred-video-codec=h264
                                 text=True,
                                 timeout=10
                             )
-                            if result.stdout.strip() == 'Online':
-                                console.print(f"    [{self.colors['success']}]✓[/] SSM agent online")
+                            ssm_status = ssm_result.stdout.strip()
+
+                            if instance_state == 'running' and ssm_status == 'Online':
+                                if not ssm_online:
+                                    console.print(f"    [{self.colors['success']}]✓[/] Instance running and SSM agent online")
+                                    console.print(f"    Waiting 60 seconds for Windows initialization...")
+                                    ssm_online = True
+                                    time.sleep(60)  # Buffer period for Windows to fully initialize
+                                console.print(f"    [{self.colors['success']}]✓[/] Instance ready for deployment")
                                 break
                         except:
                             pass
                         time.sleep(wait_interval)
+
+                    if not ssm_online:
+                        console.print(f"    [{self.colors['warning']}]⚠[/] Instance may not be fully ready, proceeding anyway...")
+                        logger.warning(f"Instance {instance_id} did not fully initialize within timeout")
 
                     # Run deployment script
                     console.print(f"    Running deployment script (this takes ~5-10 minutes)...")
