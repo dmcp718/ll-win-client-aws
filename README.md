@@ -40,19 +40,19 @@ cd ll-win-client-aws
 # 2. Install dependencies
 uv sync
 
-# 3. Subscribe to NVIDIA AMI (one-time, 2 minutes)
-#    Visit: https://aws.amazon.com/marketplace/pp/prodview-f4reygwmtxipu
-#    Click "Continue to Subscribe" → Accept terms
-
-# 4. Create IAM user (5 minutes)
+# 3. Create IAM user (5 minutes)
 cd iam
 ./setup.sh
 # Save the Access Key ID and Secret Access Key!
 
-# 5. Run deployment
+# 4. Run deployment
 cd ..
 uv run ll-win-client-aws.py
 # Enter IAM credentials when prompted
+
+# 5. (Optional) Subscribe to NVIDIA AMI for pre-installed drivers
+#    Only needed if you want use_nvidia_ami = true
+#    Visit: https://aws.amazon.com/marketplace/pp/prodview-f4reygwmtxipu
 ```
 
 **Next**: See [IAM Setup Guide](docs/IAM-SETUP.md) for detailed IAM instructions
@@ -95,8 +95,15 @@ uv run ll-win-client-aws.py
 ### Required (Before You Start)
 
 - ✅ **AWS Account** with appropriate permissions
-- ✅ **NVIDIA RTX AMI Subscription** (one-time): [Subscribe Here](https://aws.amazon.com/marketplace/pp/prodview-f4reygwmtxipu)
 - ✅ **LucidLink Credentials** (filespace domain, username, password)
+
+### Optional (For Enhanced GPU Performance)
+
+- 🔧 **NVIDIA RTX AMI Subscription** (one-time, free): [Subscribe Here](https://aws.amazon.com/marketplace/pp/prodview-f4reygwmtxipu)
+  - Pre-installed NVIDIA GRID/RTX drivers
+  - Required only if you set `use_nvidia_ami = true` in configuration
+  - Default: Uses standard Windows Server 2022 AMI (drivers install via Windows Update)
+  - Recommended for professional graphics workloads
 
 ### Local Tools (Must Be Installed)
 
