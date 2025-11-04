@@ -1358,6 +1358,86 @@ preferred-video-codec=h264
                 if 'public_ips' in outputs:
                     console.print(f"Public IPs: {', '.join(outputs['public_ips'])}")
 
+                # Run deployment script to install DCV, LucidLink, etc.
+                console.print(f"\n[bold]Step 6: Running deployment script on instances...[/bold]")
+                instance_ids = outputs.get('instance_ids', [])
+                public_ips = outputs.get('public_ips', [])
+                region = self.config.get('region', 'us-east-1')
+
+                # Generate password and save to file
+                dcv_password = self.generate_secure_password(16)
+                passwords_file = Path.home() / "Desktop" / "LucidLink-DCV" / "PASSWORDS.txt"
+                passwords_file.parent.mkdir(parents=True, exist_ok=True)
+
+                with open(passwords_file, 'w') as f:
+                    f.write("Windows Administrator Password\n")
+                    f.write("=" * 60 + "\n\n")
+                    f.write("IMPORTANT: Keep this file secure!\n\n")
+                    f.write("ONE PASSWORD FOR ALL INSTANCES:\n")
+                    f.write(f"  Password: {dcv_password}\n\n")
+                    f.write("This password works for:\n")
+                    for idx, (instance_id, public_ip) in enumerate(zip(instance_ids, public_ips)):
+                        f.write(f"  {idx + 1}. {instance_id} ({public_ip}) - ✓ Password set\n")
+                    f.write("\nConnection Info:\n")
+                    f.write("  Username: Administrator\n")
+                    f.write(f"  Password: {dcv_password}\n")
+                    f.write("  (Same password for all instances)\n")
+
+                console.print(f"  [{self.colors['info']}]Generated DCV password and saved to {passwords_file}[/]")
+
+                # Wait for SSM and run deployment script on each instance
+                deployment_script = self.script_dir / "deployment" / "deploy-windows-client.sh"
+
+                for idx, instance_id in enumerate(instance_ids):
+                    instance_name = f"ll-win-client-{idx + 1}"
+                    console.print(f"\n  [{self.colors['info']}]Deploying software to {instance_name} ({instance_id})...[/]")
+
+                    # Wait for SSM to be available
+                    console.print(f"    Waiting for SSM agent...")
+                    max_wait = 120  # 2 minutes
+                    wait_interval = 10
+                    for attempt in range(max_wait // wait_interval):
+                        try:
+                            result = subprocess.run(
+                                ['aws', 'ssm', 'describe-instance-information',
+                                 '--filters', f'Key=InstanceIds,Values={instance_id}',
+                                 '--region', region,
+                                 '--query', 'InstanceInformationList[0].PingStatus',
+                                 '--output', 'text'],
+                                capture_output=True,
+                                text=True,
+                                timeout=10
+                            )
+                            if result.stdout.strip() == 'Online':
+                                console.print(f"    [{self.colors['success']}]✓[/] SSM agent online")
+                                break
+                        except:
+                            pass
+                        time.sleep(wait_interval)
+
+                    # Run deployment script
+                    console.print(f"    Running deployment script (this takes ~5-10 minutes)...")
+                    try:
+                        env = os.environ.copy()
+                        env['DCV_ADMIN_PASSWORD'] = dcv_password
+                        result = subprocess.run(
+                            [str(deployment_script), instance_id, region],
+                            env=env,
+                            capture_output=True,
+                            text=True,
+                            timeout=1200  # 20 minutes
+                        )
+                        if result.returncode == 0:
+                            console.print(f"    [{self.colors['success']}]✓[/] Deployment completed successfully")
+                        else:
+                            console.print(f"    [{self.colors['error']}]✗[/] Deployment failed - check logs")
+                            logger.error(f"Deployment script failed for {instance_id}: {result.stderr}")
+                    except subprocess.TimeoutExpired:
+                        console.print(f"    [{self.colors['warning']}]⚠[/] Deployment timed out - may still be running")
+                    except Exception as e:
+                        console.print(f"    [{self.colors['error']}]✗[/] Deployment error: {e}")
+                        logger.error(f"Deployment script error for {instance_id}: {e}")
+
                 # Generate connection files for each instance
                 console.print(f"\n[bold]Generating connection files...[/bold]")
                 instance_ids = outputs.get('instance_ids', [])
